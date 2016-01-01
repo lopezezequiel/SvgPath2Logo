@@ -1,0 +1,469 @@
+;Code generated for MSWLogo
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Basic Functions                                                       ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+to dot_product :ux :uy :vx :vy
+    output arccos (:ux*:vx+:uy*:vy)/((sqrt :ux*:ux+:uy*:uy)*(sqrt :vx*:vx+:vy*:vy))
+end
+
+
+;draws a cubic bezier curve from current point to (x, y)
+;@param x1, y1 are the first control point
+;@param x2, y2 are the second control point
+;@param n is the number of points
+to cubic_bezier :x1 :y1 :x2 :y2 :x :y :n
+
+    make "dt (1.0/(:n-1))
+
+    for [i 0 :n 1] [
+        make "t :i*:dt
+
+        ;calculating coefficients
+        make "cx 3.0*(:x1-(first pos))
+        make "bx 3.0*(:x2-:x1)-:cx
+        make "ax :x-(first pos)-:cx-:bx
+
+        make "cy 3.0*(:y1-(last pos))
+        make "by 3.0*(:y2-:y1)-:cy
+        make "ay :y-(last pos)-:cy-:by
+
+        make "rx :ax*:t*:t*:t+:bx*:t*:t+:cx*:t+(first pos)
+        make "ry :ay*:t*:t*:t+:by*:t*:t+:cy*:t+(last pos)
+
+        ;goto new point
+        setxy :rx :ry
+
+        ;save the second control point
+        make "lx1 :x2
+        make "ly1 :y2
+    ]
+end
+
+
+;draws an arc
+;@param (cx, cy) is the center
+;@param rx radius x
+;@param ry radius y
+;@param rt is the angle from the x-axis of the current coordinate system to the x-axis of the ellipse
+;@param o which is the start angle of the elliptical arc prior to the stretch and rotate operations
+;@param do is the difference between the initial and final angle
+;see also http://www.w3.org/TR/SVG/implnote.html#ArcParameterizationAlternatives
+to draw_arc :cx :cy :rx :ry :rt :o :do
+
+    ;make angle positive and less or equal than 360
+    make "o (remainder (int :o) 360)
+
+    if :o<0 [
+        make "o :o+360
+    ]
+
+    ;set turning sense
+    ifelse :do<0 [
+        make "i -1
+    ] [
+        make "i 1
+    ]
+
+    ;draw arc
+    for [a :o :o+:do :i] [
+        ;calculate point
+        make "px (cos :rt)*:rx*(cos :a)-(sin :rt)*:ry*(sin :a)+:cx
+        make "py (sin :rt)*:rx*(cos :a)+(cos :rt)*:ry*(sin :a)+:cy
+
+        ;goto the point
+        setxy :px :py
+    ]
+
+end
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;SVG Functions                                                         ;
+;http://www.w3.org/TR/SVG/paths.html                                   ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+to absolute_moveto :x :y
+  penup
+  setxy :x :y
+  pendown
+  make "x0 (first pos)
+  make "y0 (last pos)
+end
+
+
+to relative_moveto :x :y
+  absolute_moveto :x+(first pos) :y+(last pos)
+end
+
+
+to closepath
+  setxy :x0 :y0
+end
+
+
+to absolute_horizontal_lineto :x
+  setx :x
+end
+
+
+to relative_horizontal_lineto :x
+  absolute_horizontal_lineto :x+(first pos)
+end
+
+
+to absolute_vertical_lineto :y
+  sety :y
+end
+
+
+to relative_vertical_lineto :y
+  absolute_vertical_lineto :y+(last pos)
+end
+
+
+to absolute_lineto :x :y
+  setxy :x :y
+end
+
+
+to relative_lineto :x :y
+  absolute_lineto :x+(first pos) :y+(last pos)
+end
+
+
+to absolute_cubic_bezier :x1 :y1 :x2 :y2 :x :y
+    ;n=1000 to ensure that the curve is smooth
+    cubic_bezier :x1 :y1 :x2 :y2 :x :y 1000
+end
+
+
+to relative_cubic_bezier :x1 :y1 :x2 :y2 :x :y
+    absolute_cubic_bezier :x1+(first pos) :y1+(last pos) :x2+(first pos) :y2+(last pos) :x+(first pos) :y+(last pos)
+end
+
+
+to absolute_smooth_cubic_bezier :x2 :y2 :x :y
+    absolute_cubic_bezier (2*(first pos)-(:lx1)) (2*(last pos)-(:ly1)) :x2 :y2 :x :y
+end
+
+
+to relative_smooth_cubic_bezier :x2 :y2 :x :y
+    absolute_cubic_bezier (2*(first pos)-(:lx1)) (2*(last pos)-(:ly1)) :x2+(first pos) :y2+(last pos) :x+(first pos) :y+(last pos)
+end
+
+
+to absolute_quadratic_bezier :x1 :y1 :x :y
+    ;quadratic bezier expressed as cubic bezier
+    ;http://fontforge.github.io/bezier.html
+    ;see also "Converting TrueType to PostScript"
+	absolute_cubic_bezier (first pos)+(:x1-(first pos))*2/3 (last pos)+(:y1-(last pos))*2/3 :x+(:x1-:x)*2/3 :y+(:y1-:y)*2/3 :x :y
+end
+
+
+to relative_quadratic_bezier :x1 :y1 :x2 :y2 :x :y
+    absolute_quadratic_bezier :x1+(first pos) :y1+(last pos) :x2+(first pos) :y2+(last pos) :x+(first pos) :y+(last pos)
+end
+
+
+to absolute_smooth_quadratic_bezier :x :y
+    absolute_quadratic_bezier (2*(first pos)-(:lx1)) (2*(last pos)-(:ly1)) :x :y
+end
+
+
+to relative_smooth_quadratic_bezier :x :y
+    absolute_quadratic_bezier (2*(first pos)-(:lx1)) (2*(last pos)-(:ly1)) :x+(first pos) :y+(last pos)
+end
+
+
+;see also http://www.w3.org/TR/SVG/implnote.html#ArcConversionEndpointToCenter
+to absolute_arc :rx :ry :rt :fa :fs :x2 :y2
+
+    ;auxiliar calcs
+    make "rt (remainder (int :rt) 360)
+    make "x1 (first pos)
+    make "y1 (last pos)
+    make "tx1 (cos :rt)*(:x1-:x2)/2+(sin :rt)*(:y1-:y2)/2
+    make "ty1 -(sin :rt)*(:x1-:x2)/2+(cos :rt)*(:y1-:y2)/2
+    
+    
+    ;Correction of out-of-range rx and ry
+    make "rx (abs :rx)
+    make "ry (abs :ry)
+    make "d (sqrt (:tx1*:tx1/(:rx*:rx)+:ty1*:ty1/(:ry*:ry)))
+    make "rx :d*:rx
+    make "ry :d*:ry
+
+    ;auxiliar calcs    
+    make "sq (sqrt abs (((:rx*:rx*:ry*:ry-:rx*:rx*:ty1*:ty1-:ry*:ry*:tx1*:tx1)/(:rx*:rx*:ty1*:ty1+:ry*:ry*:tx1*:tx1))))
+    if :fa=:fs [
+        make "sq -:sq
+    ]    
+    make "tcx :sq*:rx*:ty1/:ry
+    make "tcy :sq*-:ry*:tx1/:rx
+
+    ;calculating coefficients
+    make "cx (cos :rt)*:tcx-(sin :rt)*:tcy+(:x1+:x2)/2
+    make "cy (sin :rt)*:tcx+(cos :rt)*:tcy+(:y1+:y2)/2
+    make "o dot_product 1 0 (:tx1-:tcx)/:rx (:ty1-:tcy)/:ry
+    make "do (remainder (int (dot_product (:tx1-:tcx)/:rx (:ty1-:tcy)/:ry (-:tx1-:tcx)/:rx (-:ty1-:tcy)/:ry)) 360)
+
+    ;draw
+    draw_arc :cx :cy :rx :ry :rt -:o -:do
+end
+
+
+to relative_arc :rx :ry :rt :fa :fs :x2 :y2 
+    absolute_arc :rx :ry :rt :fa :fs (first pos)+:x2 (last pos)+:y2
+end
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Draw                                                                  ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+relative_moveto 124.43481 -11.2952859
+relative_lineto 0.0 -13.59387
+relative_cubic_bezier -2.29008 -0.106485 -2.783505 -3.429054 -0.323664 -3.553827
+relative_cubic_bezier 1.35696 -0.068778 4.343568 -0.518508 5.48448 0.275439
+relative_cubic_bezier 1.621557 1.128291 0.301008 3.196338 -1.276851 3.278388
+relative_cubic_bezier 0.0 2.01432 -0.482259 4.891041 0.752517 6.634458
+relative_cubic_bezier 0.762228 1.076181 2.317431 1.86333 3.419505 0.772908
+relative_cubic_bezier 1.516365 -1.500666 0.844764 -5.452113 0.844764 -7.407366
+relative_cubic_bezier -1.577862 -0.08205 -2.898408 -2.150097 -1.276854 -3.278388
+relative_cubic_bezier 1.140915 -0.793947 4.12833 -0.344217 5.48448 -0.275439
+relative_cubic_bezier 2.459844 0.124773 1.966257 3.447342 -0.323664 3.553827
+relative_cubic_bezier 0.0 2.843223 0.776793 7.044216 -0.830196 9.547428
+relative_cubic_bezier -1.5018 2.337984 -6.570372 3.006513 -7.90872 0.16248
+relative_cubic_bezier -0.475788 1.612329 -0.161832 3.662415 -0.161832 5.34045
+relative_cubic_bezier 0.0 0.569649 0.181251 1.566369 -0.37545 1.937451
+relative_cubic_bezier -0.629526 0.4206 -1.971111 0.166362 -2.699355 0.166362
+relative_cubic_bezier -0.781485 -0.0 -1.921266 0.172512 -2.469231 -0.530646
+relative_cubic_bezier -1.090422 -1.399359 0.20925 -2.96217 1.660071 -3.029655
+relative_moveto 29.129727 -13.59387
+relative_lineto -5.178618 -0.0
+relative_cubic_bezier 3.587811 3.433908 8.751864 6.445275 8.062461 12.137385
+relative_cubic_bezier -0.553467 4.554108 -5.88906 5.445318 -9.518949 4.26087
+relative_cubic_bezier -1.061616 -0.346482 -2.435568 -0.870654 -3.073185 -1.848444
+relative_cubic_bezier -0.747663 -1.145607 -0.746046 -3.731193 0.969372 -3.991257
+relative_cubic_bezier 1.843266 -0.279483 2.39511 2.582835 4.369458 2.723952
+relative_cubic_bezier 2.781891 0.198732 3.516606 -2.582511 2.404821 -4.705422
+relative_cubic_bezier -1.526073 -2.916045 -4.804785 -5.140749 -7.097943 -7.444263
+relative_cubic_bezier -0.875508 -0.880365 -2.331996 -2.316459 -1.796331 -3.719703
+relative_cubic_bezier 0.443418 -1.164057 1.75911 -0.973419 2.767323 -0.973419
+relative_lineto 7.767927 -0.0
+relative_cubic_bezier 0.700731 -0.0 2.759232 -0.352308 3.141156 0.375126
+relative_cubic_bezier 0.4596 0.875511 0.582594 3.628107 -0.048552 4.416069
+relative_cubic_bezier -1.069707 1.333494 -2.696118 0.099687 -2.76894 -1.230894
+absolute_moveto 234.64227 -18.7395489
+relative_cubic_bezier 0.86904 -0.0 2.30448 -0.271713 3.03759 0.281913
+relative_cubic_bezier 1.38852 1.04883 -0.31557 3.942222 -1.18137 4.841199
+relative_cubic_bezier -0.74445 0.77307 -1.9614 0.216855 -2.56503 0.806892
+relative_cubic_bezier -0.50817 0.49569 0.18447 1.357122 -0.15375 1.969818
+relative_cubic_bezier -0.61497 1.109031 -3.90177 1.983732 -5.12523 2.106078
+relative_cubic_bezier -1.725114 0.172674 -2.788347 -0.336771 -4.207614 -1.24206
+relative_cubic_bezier -0.521097 -0.333048 -1.394988 -0.717723 -1.165188 -1.482054
+relative_cubic_bezier 0.247602 -0.81984 1.131204 -1.194966 1.812516 -1.570092
+relative_cubic_bezier 2.777034 -1.529472 5.134926 -0.46737 7.926516 -0.02103
+relative_cubic_bezier 0.52434 0.083829 0.82698 -0.338877 0.68454 -0.830034
+relative_cubic_bezier -0.11328 -0.393576 -1.13604 -2.22519 -1.51149 -2.284743
+relative_cubic_bezier -0.6894 -0.109236 -2.34819 1.146417 -3.21561 1.302585
+relative_cubic_bezier -2.548845 0.458631 -3.08127 -0.571266 -4.558794 -2.260143
+relative_cubic_bezier -0.839907 -0.96015 -1.883724 -2.279079 -0.873891 -3.543471
+relative_cubic_bezier 2.498682 -3.126105 7.434555 -3.197148 9.276195 0.468666
+relative_cubic_bezier 0.36897 0.735363 -0.55023 2.993727 0.25407 3.369987
+relative_cubic_bezier 0.93378 0.436944 1.47591 -1.311 1.56654 -1.913502
+relative_moveto -39.48696 -0.161829
+relative_cubic_bezier 0.869037 -0.0 2.304486 -0.271716 3.037584 0.28191
+relative_cubic_bezier 1.388517 1.048833 -0.315573 3.942222 -1.181373 4.841199
+relative_cubic_bezier -0.744426 0.77307 -1.961403 0.216855 -2.565033 0.806892
+relative_cubic_bezier -0.508152 0.49569 0.184488 1.357122 -0.153741 1.969818
+relative_cubic_bezier -0.614961 1.109034 -3.901764 1.983732 -5.125215 2.106078
+relative_cubic_bezier -1.725126 0.172674 -2.788362 -0.336771 -4.207626 -1.24206
+relative_cubic_bezier -0.521097 -0.33321 -1.394991 -0.717723 -1.165188 -1.482054
+relative_cubic_bezier 0.247602 -0.81984 1.131204 -1.195128 1.812516 -1.570092
+relative_cubic_bezier 2.777034 -1.529472 5.134923 -0.46737 7.926522 -0.02103
+relative_cubic_bezier 0.524334 0.083829 0.826959 -0.338877 0.684549 -0.830034
+relative_cubic_bezier -0.113283 -0.393576 -1.136061 -2.225187 -1.511511 -2.284743
+relative_cubic_bezier -0.689403 -0.109236 -2.348178 1.146417 -3.215598 1.302585
+relative_cubic_bezier -2.548851 0.458631 -3.081276 -0.571266 -4.5588 -2.260143
+relative_cubic_bezier -0.839907 -0.960147 -1.883724 -2.279079 -0.873894 -3.543471
+relative_cubic_bezier 2.498685 -3.126105 7.434555 -3.197148 9.276201 0.468666
+relative_cubic_bezier 0.368976 0.735363 -0.55023 2.993727 0.254076 3.369987
+relative_cubic_bezier 0.933768 0.436944 1.475904 -1.311 1.566531 -1.913499
+absolute_moveto 18.111315 -10.0006299
+relative_cubic_bezier -4.937328 2.188452 -12.81546 -0.317514 -11.016378 -6.958767
+relative_cubic_bezier 0.79314 -2.927538 4.283202 -3.515634 6.808752 -4.147263
+relative_cubic_bezier 1.208559 -0.302142 2.973333 -0.584214 3.359952 -2.002347
+relative_cubic_bezier 0.63438 -2.327304 -2.422785 -2.830923 -4.00728 -2.536713
+relative_cubic_bezier -2.535096 0.470607 -2.374881 2.794188 -4.080267 3.991743
+relative_cubic_bezier -0.900918 0.632601 -2.305779 0.28191 -2.623941 -0.808512
+relative_cubic_bezier -0.353601 -1.21131 -0.492939 -5.370873 0.591495 -6.190551
+relative_cubic_bezier 1.137195 -0.859326 2.127603 0.345996 3.206052 0.222519
+relative_cubic_bezier 3.690087 -0.422058 9.054813 -1.5707391 11.107002 2.732205
+relative_cubic_bezier 2.074521 4.349877 -0.952866 7.811136 -5.125536 8.704773
+relative_cubic_bezier -1.391268 0.298092 -4.758666 0.458469 -4.86693 2.393007
+relative_cubic_bezier -0.148239 2.6487 3.967467 2.581215 5.322486 1.310028
+relative_cubic_bezier 0.717237 -0.672897 0.919689 -1.824654 1.817046 -2.300277
+relative_cubic_bezier 0.715296 -0.379173 1.798761 -0.28515 2.26872 0.433062
+relative_cubic_bezier 0.60768 0.928914 0.518673 4.514781 -0.039 5.456805
+relative_cubic_bezier -0.589392 0.995265 -2.290893 0.55557 -2.722173 -0.299712
+relative_moveto 88.360164 -4.854954
+relative_cubic_bezier -0.808347 -0.0 -2.00655 0.218472 -2.733501 -0.1908
+relative_cubic_bezier -0.942831 -0.530646 -0.942831 -2.486223 0.0 -3.016869
+relative_cubic_bezier 0.726951 -0.409272 1.925154 -0.1908 2.733501 -0.1908
+relative_cubic_bezier 0.0 -2.675565 -0.974712 -7.58538 1.462962 -9.42039
+relative_cubic_bezier 2.311929 -1.740501 6.19395 -1.345956 8.732442 -0.351822
+relative_cubic_bezier 1.12716 0.441315 2.536554 1.108062 2.579763 2.489781
+relative_cubic_bezier 0.038676 1.24287 -0.909009 1.926933 -2.094267 1.726908
+relative_cubic_bezier -1.759758 -0.297123 -3.807741 -2.053485 -5.656992 -1.028604
+relative_cubic_bezier -1.779663 0.986205 -1.139943 4.890072 -1.139943 6.584127
+relative_cubic_bezier 1.531089 -0.0 4.853982 -0.624183 6.128085 0.281913
+relative_cubic_bezier 0.988308 0.702996 0.844923 2.539464 -0.305052 2.996478
+relative_cubic_bezier -1.552776 0.61674 -4.157136 0.120078 -5.823033 0.120078
+relative_cubic_bezier 0.0 1.334142 0.446007 3.653838 -0.1908 4.847832
+relative_cubic_bezier -0.565278 1.059837 -2.862156 1.21293 -3.502365 0.134322
+relative_cubic_bezier -0.677913 -1.141887 -0.1908 -3.673581 -0.1908 -4.982154
+relative_moveto 109.560135 -7.767927
+relative_cubic_bezier 1.634499 0.0183 3.11526 2.335071 1.276851 3.369501
+relative_cubic_bezier -1.543875 0.869037 -5.176998 0.214749 -6.940965 0.190152
+relative_cubic_bezier -1.576242 -0.02202 -2.788362 -1.903953 -1.411173 -3.165753
+relative_cubic_bezier 0.746043 -0.683094 2.255934 -0.3939 3.191322 -0.3939
+relative_cubic_bezier 0.0 -0.596997 0.171543 -1.531575 -0.166686 -2.054778
+relative_cubic_bezier -0.768702 -1.190436 -3.803049 -0.827607 -4.8501 -0.303597
+relative_cubic_bezier -1.527693 0.764817 -2.464698 2.492211 -2.702592 4.138524
+relative_cubic_bezier -0.51786 3.582795 1.41603 10.303023 6.424725 7.793982
+relative_cubic_bezier 1.462959 -0.732612 2.412912 -5.382525 4.655901 -3.650601
+relative_cubic_bezier 0.480639 0.371079 0.514623 0.963708 0.522717 1.520733
+relative_cubic_bezier 0.01941 1.422825 0.521097 4.227531 -0.236277 5.465385
+relative_cubic_bezier -0.666747 1.092201 -2.209002 0.404739 -2.676696 -0.448599
+relative_cubic_bezier -1.174899 0.61917 -2.556942 0.964518 -3.883965 0.97083
+relative_cubic_bezier -2.33847 0.01134 -4.468176 -0.441315 -6.311439 -1.994577
+relative_cubic_bezier -4.170405 -3.516606 -4.361367 -10.949379 -0.89655 -14.991291
+relative_cubic_bezier 2.516487 -2.93304 6.743532 -3.164136 10.282794 -2.496741
+relative_cubic_bezier 1.037343 0.195816 2.752758 0.379821 3.4632 1.25889
+relative_cubic_bezier 0.755754 0.937977 0.258933 3.621633 0.258933 4.79184
+relative_moveto -52.109844 9.386244
+relative_lineto 0.0 -11.651889
+relative_cubic_bezier -0.891693 -0.0 -2.165307 0.186591 -2.843382 -0.534531
+relative_cubic_bezier -0.881985 -0.94008 -0.43533 -2.85795 0.901401 -3.00813
+relative_cubic_bezier 3.573246 -0.401343 7.407042 -0.01764 11.004564 -0.01764
+relative_cubic_bezier 1.331874 -0.0 3.443781 -0.403122 4.683411 0.097587
+relative_cubic_bezier 0.703968 0.284499 0.655419 1.046079 0.657039 1.682565
+relative_cubic_bezier 0.00324 1.413762 0.66189 5.238819 -0.522717 6.197673
+relative_cubic_bezier -0.80754 0.653961 -2.335233 0.493425 -2.755995 -0.540681
+relative_cubic_bezier -0.432093 -1.061778 -0.119757 -2.740623 -0.119757 -3.876843
+relative_lineto -7.120599 -0.0
+relative_lineto 0.0 11.651889
+relative_cubic_bezier 0.841524 -0.0 1.988913 -0.195006 2.715537 0.325122
+relative_cubic_bezier 0.943479 0.677589 0.885219 2.472951 -0.142413 3.044379
+relative_cubic_bezier -1.514745 0.841203 -4.898646 0.1908 -6.618918 0.1908
+relative_cubic_bezier -0.742809 -0.0 -1.73322 0.157785 -2.409678 -0.213294
+relative_cubic_bezier -0.995265 -0.545049 -0.885219 -2.453694 0.0 -3.046323
+relative_cubic_bezier 0.703968 -0.471579 1.767204 -0.300684 2.571507 -0.300684
+relative_moveto 57.626688 0.302142
+relative_cubic_bezier -0.726624 -0.131895 -0.970989 -1.201602 -1.257432 -1.758627
+relative_cubic_bezier -0.703968 -1.365213 -1.940364 -4.068129 1.081035 -3.467571
+relative_cubic_bezier 0.870657 0.172836 2.811021 2.746449 2.809401 3.612573
+relative_cubic_bezier 0.0 0.736494 -1.987293 1.730628 -2.633004 1.613625
+relative_moveto -39.48696 -0.161832
+relative_cubic_bezier -0.726624 -0.131895 -0.970989 -1.201602 -1.257432 -1.758627
+relative_cubic_bezier -0.703968 -1.365213 -1.940364 -4.068129 1.081035 -3.467571
+relative_cubic_bezier 0.870657 0.172836 2.811018 2.746449 2.809401 3.612573
+relative_cubic_bezier 0.0 0.736497 -1.987296 1.730628 -2.633004 1.613625
+relative_moveto -126.08154 -13.73418
+relative_cubic_bezier 0.0 -3.3363231 -1.475907 -4.3210701 -4.693122 -4.2132921
+relative_cubic_bezier -1.417971 0.047418 -4.434192 0.767247 -4.323822 -1.612653
+relative_cubic_bezier 0.070071 -1.506816 1.796331 -1.952823 3.029166 -2.076141
+relative_cubic_bezier 2.694177 -0.26961 6.591573 -0.268641 8.542617 1.920783
+relative_cubic_bezier 1.38447 1.553586 1.329123 3.5564151 1.329123 5.4958071
+relative_lineto 0.0 9.87174
+relative_cubic_bezier 1.475583 0.076707 2.859408 1.855077 1.548084 3.166401
+relative_cubic_bezier -1.067928 1.06809 -5.087994 0.816279 -5.108382 -0.900756
+relative_cubic_bezier -0.725007 0.709632 -1.429461 1.318929 -2.427477 1.592424
+relative_cubic_bezier -2.898732 0.794595 -6.209163 -0.274143 -7.963905 -2.725248
+relative_cubic_bezier -2.417769 -3.377265 -1.524456 -9.019047 2.299791 -10.94355
+relative_cubic_bezier 1.132497 -0.569811 2.31387 -0.708663 3.560298 -0.708339
+relative_cubic_bezier 1.529796 0.0006 2.880444 0.361209 4.207629 1.132824
+relative_moveto 13.432038 11.490057
+relative_lineto -0.161832 -0.0
+relative_cubic_bezier -0.02136 1.809603 -3.78735 2.22195 -4.94655 1.062588
+relative_cubic_bezier -1.311324 -1.311324 0.072501 -3.089694 1.548084 -3.166401
+relative_lineto 0.0 -13.7557041
+relative_cubic_bezier -0.736335 -0.0 -1.596147 0.085773 -2.244123 -0.338064
+relative_cubic_bezier -0.85512 -0.559617 -0.939756 -2.263218 -0.119592 -2.897115
+relative_cubic_bezier 0.719019 -0.555567 1.998783 -0.325119 2.849211 -0.325119
+relative_cubic_bezier 1.673016 -0.0 4.986522 -0.636162 6.455631 0.1908
+relative_cubic_bezier 0.97698 0.549903 0.903669 2.477481 0.0 3.055869
+relative_cubic_bezier -0.860136 0.550551 -2.245902 0.313629 -3.218997 0.313629
+relative_lineto 0.0 4.2076281
+relative_cubic_bezier 1.353723 -0.963708 2.72994 -1.297245 4.369458 -1.294656
+relative_cubic_bezier 6.945984 0.01068 9.52623 9.702789 4.045797 13.628019
+relative_cubic_bezier -2.169195 1.553748 -7.147626 2.25027 -8.577087 -0.681474
+relative_moveto 25.08393 -4.045794
+relative_cubic_bezier -2.878341 0.059391 -6.204144 0.74928 -8.738754 -1.074078
+relative_cubic_bezier -2.658573 -1.91253 -2.368248 -6.434433 0.647166 -7.840428
+relative_cubic_bezier 2.785608 -1.298862 6.064485 -0.175425 8.577084 1.146579
+relative_cubic_bezier 0.634218 -1.428975 3.94902 -2.103651 5.059185 -0.745398
+relative_cubic_bezier 1.154025 1.412145 -0.188694 2.942589 -1.660716 3.011043
+relative_cubic_bezier 0.0 3.108951 1.124406 8.74701 -2.103813 10.594803
+relative_cubic_bezier -2.297367 1.314885 -6.296229 0.987984 -8.738919 0.241617
+relative_cubic_bezier -1.138488 -0.34794 -2.613906 -1.153215 -2.334747 -2.582352
+relative_cubic_bezier 0.358134 -1.832421 2.44884 -1.243839 3.629403 -0.740703
+relative_cubic_bezier 1.626408 0.69345 3.957273 1.75377 5.17716 -0.233361
+relative_cubic_bezier 0.325929 -0.531294 0.344055 -1.184448 0.486951 -1.777722
+relative_moveto -57.935787 1.941981
+relative_lineto -2.751138 -6.311442
+relative_lineto -0.161832 -0.0
+relative_lineto -2.589309 6.311442
+relative_cubic_bezier 1.478493 0.134157 2.772177 1.920135 1.411335 3.166401
+relative_cubic_bezier -1.036209 0.949305 -4.120563 0.409758 -5.457132 0.393252
+relative_cubic_bezier -0.531618 -0.00648 -1.138485 -0.01149 -1.548081 -0.4062
+relative_cubic_bezier -0.596838 -0.574986 -0.552819 -2.017719 0.0 -2.604195
+relative_cubic_bezier 0.440667 -0.467532 1.16535 -0.440346 1.578021 -0.923736
+relative_cubic_bezier 1.650522 -1.933407 2.501271 -5.539665 3.506085 -7.878945
+relative_cubic_bezier 0.615771 -1.433667 0.948336 -3.051822 2.775417 -3.074157
+relative_cubic_bezier 2.026944 -0.02493 2.334585 1.314723 3.114453 2.912325
+relative_cubic_bezier 1.238823 2.538171 2.181492 5.320383 3.606258 7.758381
+relative_cubic_bezier 0.419469 0.717723 1.250799 0.6381 1.78614 1.206132
+relative_cubic_bezier 0.552816 0.586476 0.596835 2.029371 0.0 2.604195
+relative_cubic_bezier -0.409596 0.39471 -1.016466 0.399726 -1.548084 0.4062
+relative_cubic_bezier -1.299348 0.01602 -4.118295 0.515919 -5.141721 -0.393252
+relative_cubic_bezier -1.428813 -1.269246 -0.071529 -3.035157 1.419588 -3.166401
+closepath
+absolute_moveto 220.077408 -19.3575819
+relative_cubic_bezier -1.085892 -0.131409 -0.970992 -1.12554 -0.970992 -1.971273
+relative_cubic_bezier 0.0 -1.586115 0.930534 -4.246143 2.299632 -5.242056
+relative_cubic_bezier 1.6167 -1.175061 1.249341 2.726379 2.8272 1.830156
+relative_cubic_bezier 1.100457 -0.624024 -0.48873 -2.203827 -0.072825 -3.026904
+relative_cubic_bezier 0.92406 -1.823034 4.777287 -1.77141 6.436047 -1.41279
+relative_cubic_bezier 0.82212 0.178014 3.49881 1.25808 3.21075 2.342514
+relative_cubic_bezier -0.17316 0.651858 -0.93216 0.844278 -1.31409 1.335921
+relative_cubic_bezier -0.47739 0.616095 -0.55668 1.389651 -1.41762 1.626249
+relative_cubic_bezier -2.06499 0.567057 -4.477899 -1.521705 -6.580095 -0.34713
+relative_cubic_bezier -0.391632 0.219444 -0.445035 0.75705 -0.671601 1.107414
+relative_cubic_bezier -0.391632 0.604281 -1.09722 0.886032 -1.498563 1.47801
+relative_cubic_bezier -0.710442 1.050453 -0.456366 2.496096 -2.247843 2.279889
+relative_moveto -39.48696 -0.161832
+relative_cubic_bezier -1.085892 -0.131409 -0.970992 -1.12554 -0.970992 -1.971273
+relative_cubic_bezier 0.0 -1.586439 0.930534 -4.24566 2.299632 -5.242056
+relative_cubic_bezier 1.571385 -1.143018 1.249341 2.725731 2.8272 1.830156
+relative_cubic_bezier 1.100457 -0.624024 -0.488733 -2.203827 -0.072825 -3.026904
+relative_cubic_bezier 0.92406 -1.823034 4.777275 -1.77141 6.436053 -1.41279
+relative_cubic_bezier 0.822105 0.178014 3.498801 1.25808 3.210741 2.342514
+relative_cubic_bezier -0.17316 0.651858 -0.932151 0.844278 -1.314072 1.335921
+relative_cubic_bezier -0.477405 0.616095 -0.556704 1.389651 -1.417647 1.626249
+relative_cubic_bezier -2.064975 0.567057 -4.477887 -1.521705 -6.580083 -0.34713
+relative_cubic_bezier -0.391632 0.219444 -0.445038 0.75705 -0.671601 1.107417
+relative_cubic_bezier -0.391632 0.604278 -1.09722 0.886029 -1.498563 1.478007
+relative_cubic_bezier -0.710442 1.050453 -0.456366 2.496096 -2.247843 2.279889
+relative_moveto 52.109832 -3.913257
+relative_cubic_bezier 0.97908 -0.451023 1.50504 -1.797627 2.58609 -1.974186
+relative_cubic_bezier 1.21212 -0.197595 2.14425 3.803211 2.43069 4.725327
+relative_cubic_bezier -2.65887 1.393374 -4.01019 -0.477078 -5.01678 -2.751141
+relative_moveto -39.486951 -0.161832
+relative_cubic_bezier 0.979083 -0.451023 1.505034 -1.797627 2.586072 -1.974186
+relative_cubic_bezier 1.21212 -0.197595 2.144271 3.803211 2.430714 4.725327
+relative_cubic_bezier -2.658897 1.393374 -4.010193 -0.477078 -5.016786 -2.751141
+closepath

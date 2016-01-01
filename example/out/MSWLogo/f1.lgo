@@ -1,0 +1,264 @@
+;Code generated for MSWLogo
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Basic Functions                                                       ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+to dot_product :ux :uy :vx :vy
+    output arccos (:ux*:vx+:uy*:vy)/((sqrt :ux*:ux+:uy*:uy)*(sqrt :vx*:vx+:vy*:vy))
+end
+
+
+;draws a cubic bezier curve from current point to (x, y)
+;@param x1, y1 are the first control point
+;@param x2, y2 are the second control point
+;@param n is the number of points
+to cubic_bezier :x1 :y1 :x2 :y2 :x :y :n
+
+    make "dt (1.0/(:n-1))
+
+    for [i 0 :n 1] [
+        make "t :i*:dt
+
+        ;calculating coefficients
+        make "cx 3.0*(:x1-(first pos))
+        make "bx 3.0*(:x2-:x1)-:cx
+        make "ax :x-(first pos)-:cx-:bx
+
+        make "cy 3.0*(:y1-(last pos))
+        make "by 3.0*(:y2-:y1)-:cy
+        make "ay :y-(last pos)-:cy-:by
+
+        make "rx :ax*:t*:t*:t+:bx*:t*:t+:cx*:t+(first pos)
+        make "ry :ay*:t*:t*:t+:by*:t*:t+:cy*:t+(last pos)
+
+        ;goto new point
+        setxy :rx :ry
+
+        ;save the second control point
+        make "lx1 :x2
+        make "ly1 :y2
+    ]
+end
+
+
+;draws an arc
+;@param (cx, cy) is the center
+;@param rx radius x
+;@param ry radius y
+;@param rt is the angle from the x-axis of the current coordinate system to the x-axis of the ellipse
+;@param o which is the start angle of the elliptical arc prior to the stretch and rotate operations
+;@param do is the difference between the initial and final angle
+;see also http://www.w3.org/TR/SVG/implnote.html#ArcParameterizationAlternatives
+to draw_arc :cx :cy :rx :ry :rt :o :do
+
+    ;make angle positive and less or equal than 360
+    make "o (remainder (int :o) 360)
+
+    if :o<0 [
+        make "o :o+360
+    ]
+
+    ;set turning sense
+    ifelse :do<0 [
+        make "i -1
+    ] [
+        make "i 1
+    ]
+
+    ;draw arc
+    for [a :o :o+:do :i] [
+        ;calculate point
+        make "px (cos :rt)*:rx*(cos :a)-(sin :rt)*:ry*(sin :a)+:cx
+        make "py (sin :rt)*:rx*(cos :a)+(cos :rt)*:ry*(sin :a)+:cy
+
+        ;goto the point
+        setxy :px :py
+    ]
+
+end
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;SVG Functions                                                         ;
+;http://www.w3.org/TR/SVG/paths.html                                   ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+to absolute_moveto :x :y
+  penup
+  setxy :x :y
+  pendown
+  make "x0 (first pos)
+  make "y0 (last pos)
+end
+
+
+to relative_moveto :x :y
+  absolute_moveto :x+(first pos) :y+(last pos)
+end
+
+
+to closepath
+  setxy :x0 :y0
+end
+
+
+to absolute_horizontal_lineto :x
+  setx :x
+end
+
+
+to relative_horizontal_lineto :x
+  absolute_horizontal_lineto :x+(first pos)
+end
+
+
+to absolute_vertical_lineto :y
+  sety :y
+end
+
+
+to relative_vertical_lineto :y
+  absolute_vertical_lineto :y+(last pos)
+end
+
+
+to absolute_lineto :x :y
+  setxy :x :y
+end
+
+
+to relative_lineto :x :y
+  absolute_lineto :x+(first pos) :y+(last pos)
+end
+
+
+to absolute_cubic_bezier :x1 :y1 :x2 :y2 :x :y
+    ;n=1000 to ensure that the curve is smooth
+    cubic_bezier :x1 :y1 :x2 :y2 :x :y 1000
+end
+
+
+to relative_cubic_bezier :x1 :y1 :x2 :y2 :x :y
+    absolute_cubic_bezier :x1+(first pos) :y1+(last pos) :x2+(first pos) :y2+(last pos) :x+(first pos) :y+(last pos)
+end
+
+
+to absolute_smooth_cubic_bezier :x2 :y2 :x :y
+    absolute_cubic_bezier (2*(first pos)-(:lx1)) (2*(last pos)-(:ly1)) :x2 :y2 :x :y
+end
+
+
+to relative_smooth_cubic_bezier :x2 :y2 :x :y
+    absolute_cubic_bezier (2*(first pos)-(:lx1)) (2*(last pos)-(:ly1)) :x2+(first pos) :y2+(last pos) :x+(first pos) :y+(last pos)
+end
+
+
+to absolute_quadratic_bezier :x1 :y1 :x :y
+    ;quadratic bezier expressed as cubic bezier
+    ;http://fontforge.github.io/bezier.html
+    ;see also "Converting TrueType to PostScript"
+	absolute_cubic_bezier (first pos)+(:x1-(first pos))*2/3 (last pos)+(:y1-(last pos))*2/3 :x+(:x1-:x)*2/3 :y+(:y1-:y)*2/3 :x :y
+end
+
+
+to relative_quadratic_bezier :x1 :y1 :x2 :y2 :x :y
+    absolute_quadratic_bezier :x1+(first pos) :y1+(last pos) :x2+(first pos) :y2+(last pos) :x+(first pos) :y+(last pos)
+end
+
+
+to absolute_smooth_quadratic_bezier :x :y
+    absolute_quadratic_bezier (2*(first pos)-(:lx1)) (2*(last pos)-(:ly1)) :x :y
+end
+
+
+to relative_smooth_quadratic_bezier :x :y
+    absolute_quadratic_bezier (2*(first pos)-(:lx1)) (2*(last pos)-(:ly1)) :x+(first pos) :y+(last pos)
+end
+
+
+;see also http://www.w3.org/TR/SVG/implnote.html#ArcConversionEndpointToCenter
+to absolute_arc :rx :ry :rt :fa :fs :x2 :y2
+
+    ;auxiliar calcs
+    make "rt (remainder (int :rt) 360)
+    make "x1 (first pos)
+    make "y1 (last pos)
+    make "tx1 (cos :rt)*(:x1-:x2)/2+(sin :rt)*(:y1-:y2)/2
+    make "ty1 -(sin :rt)*(:x1-:x2)/2+(cos :rt)*(:y1-:y2)/2
+    
+    
+    ;Correction of out-of-range rx and ry
+    make "rx (abs :rx)
+    make "ry (abs :ry)
+    make "d (sqrt (:tx1*:tx1/(:rx*:rx)+:ty1*:ty1/(:ry*:ry)))
+    make "rx :d*:rx
+    make "ry :d*:ry
+
+    ;auxiliar calcs    
+    make "sq (sqrt abs (((:rx*:rx*:ry*:ry-:rx*:rx*:ty1*:ty1-:ry*:ry*:tx1*:tx1)/(:rx*:rx*:ty1*:ty1+:ry*:ry*:tx1*:tx1))))
+    if :fa=:fs [
+        make "sq -:sq
+    ]    
+    make "tcx :sq*:rx*:ty1/:ry
+    make "tcy :sq*-:ry*:tx1/:rx
+
+    ;calculating coefficients
+    make "cx (cos :rt)*:tcx-(sin :rt)*:tcy+(:x1+:x2)/2
+    make "cy (sin :rt)*:tcx+(cos :rt)*:tcy+(:y1+:y2)/2
+    make "o dot_product 1 0 (:tx1-:tcx)/:rx (:ty1-:tcy)/:ry
+    make "do (remainder (int (dot_product (:tx1-:tcx)/:rx (:ty1-:tcy)/:ry (-:tx1-:tcx)/:rx (-:ty1-:tcy)/:ry)) 360)
+
+    ;draw
+    draw_arc :cx :cy :rx :ry :rt -:o -:do
+end
+
+
+to relative_arc :rx :ry :rt :fa :fs :x2 :y2 
+    absolute_arc :rx :ry :rt :fa :fs (first pos)+:x2 (last pos)+:y2
+end
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Draw                                                                  ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+absolute_moveto 103.6764 -130.113
+relative_cubic_bezier -8.2011 -0.0 -14.6901 5.4375 -19.4271 10.1745
+absolute_lineto 33.6612 -69.3507
+relative_cubic_bezier -4.2294 4.2294 -9.1935 10.011 -10.0455 17.2392
+relative_cubic_bezier -0.849 7.1988 2.4369 14.3967 10.0455 22.0053
+relative_cubic_bezier 4.3926 4.3923 9.2739 6.6195 14.5089 6.6195
+relative_cubic_bezier 12.4704 -0.0 21.9945 -12.9315 22.7994 -14.0565
+relative_cubic_bezier 4.2375 -5.6331 2.4405 -12.3954 0.8544 -18.3639
+relative_cubic_bezier -1.6917 -6.3669 -2.5788 -10.4193 0.3744 -13.3725
+relative_lineto 12.1218 -12.1212
+relative_cubic_bezier 1.3314 -1.3314 2.8938 -1.9251 5.067 -1.9248
+relative_cubic_bezier 2.4711 0.0003 5.3049 0.753 8.3052 1.5501
+relative_cubic_bezier 3.2733 0.8697 6.6579 1.7688 9.9942 1.7688
+relative_cubic_bezier 3.2388 -0.0 6.0546 -0.8826 8.3703 -2.6238
+relative_cubic_bezier 1.0686 -0.7644 12.9801 -9.5355 13.9878 -21.216
+relative_cubic_bezier 0.5028 -5.8281 -1.7013 -11.2422 -6.5511 -16.092
+absolute_cubic_bezier 116.6475 -126.7848 110.1651 -130.113 103.6764 -130.113
+closepath
+absolute_moveto 48.1701 -30.987
+relative_cubic_bezier -3.2184 -0.0 -6.2298 -1.4466 -9.2058 -4.4229
+relative_cubic_bezier -5.8788 -5.8785 -8.463 -11.0544 -7.9008 -15.8235
+relative_cubic_bezier 0.4545 -3.8526 2.8911 -7.8048 7.9008 -12.8145
+relative_lineto 50.5881 -50.5878
+relative_cubic_bezier 5.5173 -5.5173 9.873 -7.9776 14.1237 -7.9776
+relative_cubic_bezier 4.3983 -0.0 9.1458 2.6094 14.514 7.9776
+relative_cubic_bezier 3.2508 3.2505 4.6845 6.5622 4.3836 10.1238
+relative_cubic_bezier -0.7161 8.4798 -10.7964 15.7215 -10.8984 15.7935
+relative_cubic_bezier -0.033 0.0237 -0.0717 0.0519 -0.1047 0.0765
+relative_cubic_bezier -1.0188 0.774 -2.2533 1.1346 -3.8844 1.1346
+relative_cubic_bezier -2.3568 -0.0 -5.1312 -0.7371 -8.0688 -1.5174
+relative_cubic_bezier -3.3333 -0.8856 -6.78 -1.8012 -10.2303 -1.8015
+relative_cubic_bezier 0.0 -0.0 -0.0012 -0.0 -0.0018 -0.0
+relative_cubic_bezier -4.1457 -0.0 -7.6341 1.3866 -10.3689 4.1217
+relative_lineto -12.1218 12.1209
+relative_cubic_bezier -6.1575 6.1578 -4.0296 14.1669 -2.3193 20.6019
+relative_cubic_bezier 1.5258 5.742 2.3127 9.4119 0.3828 11.9523
+relative_cubic_bezier -0.0276 0.0363 -0.0543 0.0729 -0.0807 0.1101
+absolute_cubic_bezier 64.8045 -41.8152 57.0222 -30.987 48.1701 -30.987
+closepath
